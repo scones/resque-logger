@@ -73,10 +73,13 @@ class ResqueLogger
     public function register(): void
     {
         $provider = $this->listenerProvider;
-        $provider->addListener(function (BeforeEnqueue $task) {
+        $provider->addListener(function (AfterEnqueue $task) {
             $this->logTask($task);
         });
-        $provider->addListener(function (AfterEnqueue $task) {
+        $provider->addListener(function (AfterUserJobPerform $task) {
+            $this->logTask($task);
+        });
+        $provider->addListener(function (BeforeEnqueue $task) {
             $this->logTask($task);
         });
         $provider->addListener(function (BeforeJobPop $task) {
@@ -89,9 +92,6 @@ class ResqueLogger
             $this->logTask($task);
         });
         $provider->addListener(function (BeforeUserJobPerform $task) {
-            $this->logTask($task);
-        });
-        $provider->addListener(function (AfterUserJobPerform $task) {
             $this->logTask($task);
         });
         $provider->addListener(function (FailedUserJobPerform $task) {
