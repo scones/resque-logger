@@ -5,23 +5,7 @@ namespace ResqueLogger;
 use PHPUnit\Framework\TestCase;
 use Psr\EventDispatcher\ListenerProviderInterface;
 use Psr\Log\LoggerInterface;
-use Resque\Tasks\AfterEnqueue;
-use Resque\Tasks\AfterUserJobPerform;
-use Resque\Tasks\BeforeEnqueue;
-use Resque\Tasks\BeforeJobPop;
-use Resque\Tasks\BeforeJobPush;
-use Resque\Tasks\BeforeSignalsRegister;
-use Resque\Tasks\BeforeUserJobPerform;
-use Resque\Tasks\FailedUserJobPerform;
-use Resque\Tasks\ForkFailed;
-use Resque\Tasks\JobFailed;
-use Resque\Tasks\ParentWaiting;
-use Resque\Tasks\UnknownChildFailure;
-use Resque\Tasks\WorkerDoneWorking;
-use Resque\Tasks\WorkerIdle;
-use Resque\Tasks\WorkerRegistering;
-use Resque\Tasks\WorkerStartup;
-use Resque\Tasks\WorkerUnregistering;
+use Resque\Interfaces\Serializer;
 
 class ResqueLoggerTest extends TestCase
 {
@@ -29,6 +13,7 @@ class ResqueLoggerTest extends TestCase
     {
         $this->logger = $this->getLoggerMock();
         $this->listenerProvider = $this->getListenerProviderMock();
+        $this->serializer = $this->getSerializerMock();
 
         $this->resqueLogger = new ResqueLogger($this->logger, $this->listenerProvider);
     }
@@ -42,80 +27,44 @@ class ResqueLoggerTest extends TestCase
 
     public function testRegisterShouldRegisterLoggingHandlerForEveryResqueEvent()
     {
-        $this->listenerProvider->expects($this->exactly(17))
-            ->method('addListener')
-            ->withConsecutive(
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(AfterEnqueue::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(AfterUserJobPerform::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(BeforeEnqueue::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(BeforeJobPop::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(BeforeJobPush::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(BeforeSignalsRegister::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(BeforeUserJobPerform::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(FailedUserJobPerform::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(ForkFailed::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(JobFailed::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(ParentWaiting::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(UnknownChildFailure::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(WorkerDoneWorking::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(WorkerIdle::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(WorkerRegistering::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(WorkerStartup::class, $listener);
-                }),
-                $this->callback(function ($listener) {
-                    return $this->assertFirstCallableParameterClass(WorkerUnregistering::class, $listener);
-                })
-            )
-        ;
+        $this->resqueLogger->setSerializer($this->serializer);
+
+        $property = new \ReflectionProperty(ResqueLogger::class, 'taskToCommandMap');
+        $property->setAccessible(true);
+        $map = $property->getValue($this->resqueLogger);
+
+        $i = 0;
+        foreach (array_keys($map) as $taskClassName) {
+            $payload = ['some' => 'payload'];
+            $serializedPayload = 'some serialized payload';
+            $targetLevel = 'error';
+
+            $this->resqueLogger->setLogLevelForTask($taskClassName, $targetLevel);
+            $this->logger->expects($this->at($i))
+                ->method($targetLevel)
+                ->with("{$taskClassName} - payload: {$serializedPayload}")
+            ;
+            $task = new $taskClassName();
+            $task->setPayload($payload);
+
+            $this->serializer->expects($this->at($i))
+                ->method('serialize')
+                ->with($payload)
+                ->willReturn($serializedPayload)
+            ;
+
+            $this->listenerProvider->expects($this->at($i))
+                ->method('addListener')
+                ->with($this->callback(function ($listener) use ($task, $taskClassName) {
+                    $listener($task);
+                    return $this->assertFirstCallableParameterClass($taskClassName, $listener);
+                }))
+            ;
+
+            ++$i;
+        }
 
         $this->resqueLogger->register();
-    }
-
-    public function testlogTaskShouldLogUsingTheProvidedLoggerAndCorrectMapping()
-    {
-        $this->logger->expects($this->once())
-            ->method('info')
-            ->with(WorkerIdle::class . ' - payload: {"some":"payload"}')
-        ;
-        $task = new WorkerIdle();
-        $task->setPayload(['some' => 'payload']);
-
-        $this->resqueLogger->setLogLevelForTask(WorkerIdle::class, 'info');
-
-        $reflection = new \ReflectionMethod(ResqueLogger::class, 'logTask');
-        $reflection->setAccessible(true);
-        $reflection->invoke($this->resqueLogger, $task);
     }
 
     private function assertFirstCallableParameterClass(string $className, callable $listener)
@@ -131,6 +80,15 @@ class ResqueLoggerTest extends TestCase
         return $this->getMockBuilder(ListenerProviderInterface::class)
             ->disableOriginalConstructor()
             ->setMethods(['addListener', 'getListenersForEvent'])
+            ->getMock()
+        ;
+    }
+
+    private function getSerializerMock()
+    {
+        return $this->getMockBuilder(Serializer::class)
+            ->disableOriginalConstructor()
+            ->setMethods(['serialize', 'unserialize'])
             ->getMock()
         ;
     }
