@@ -75,54 +75,71 @@ class ResqueLogger
         $provider = $this->listenerProvider;
         $provider->addListener(function (AfterEnqueue $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (AfterUserJobPerform $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (BeforeEnqueue $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (BeforeJobPop $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (BeforeJobPush $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (BeforeSignalsRegister $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (BeforeUserJobPerform $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (FailedUserJobPerform $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (ForkFailed $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (JobFailed $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (ParentWaiting $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (UnknownChildFailure $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (WorkerDoneWorking $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (WorkerIdle $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (WorkerRegistering $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (WorkerStartup $task) {
             $this->logTask($task);
+            return $task;
         });
         $provider->addListener(function (WorkerUnregistering $task) {
             $this->logTask($task);
+            return $task;
         });
     }
 
